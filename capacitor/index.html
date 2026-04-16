@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Norway Map</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body, #root {
+      height: 100%;
+      width: 100%;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+    }
+
+    #app {
+      height: 100dvh;
+      width: 100%;
+      position: relative;
+    }
+
+    #viewDiv {
+      height: 100%;
+      width: 100%;
+    }
+
+    /* ── Download panel ─────────────────────────────────────────────────── */
+    #download-panel {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot--green { background: #22a55b; }
+    .dot--blue  { background: #1a73e8; }
+
+    progress {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      border: none;
+      accent-color: #1a73e8;
+    }
+
+    .progress-label {
+      color: #555;
+      font-size: 12px;
+    }
+
+    .error-label {
+      color: #c0392b;
+      font-size: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn:active { opacity: 0.7; }
+
+    .btn--primary {
+      background: #1a73e8;
+      color: #fff;
+    }
+
+    .btn--secondary {
+      background: #f1f3f4;
+      color: #333;
+    }
+
+    .btn--danger {
+      background: none;
+      color: #c0392b;
+      padding-left: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+</html>
