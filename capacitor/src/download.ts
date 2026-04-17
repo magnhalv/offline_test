@@ -1,4 +1,4 @@
-import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Capacitor } from '@capacitor/core';
 import { ServerConfig } from './config';
 import { CapacitorDownloader } from '@capgo/capacitor-downloader';
@@ -22,17 +22,57 @@ export type ProgressCallback = (p: DownloadProgress) => void;
 
 const DOWNLOAD_ID = 'tpk-download';
 
+const LOCAL_RELATIVE_PATH = `downloads/${ServerConfig.localFileName}`;
+
+
+export async function testFilesystem(): Promise<void> {
+  // const content = 'hello from testFilesystem';
+  // const path = 'test_write.txt';
+  // console.log('[testFilesystem] Writing:', JSON.stringify(content), 'to path:', path);
+  // console.log(JSON.stringify(await Filesystem.getUri({ path, directory: Directory.Data })));
+  // console.log(JSON.stringify(await Filesystem.getUri({ path, directory: Directory.Documents })));
+  // {
+  //   const path = 'test_write_data.txt';
+  //   await Filesystem.writeFile({ path, data: content, encoding: Encoding.UTF8, directory: Directory.External });
+  //   let result = await Filesystem.readFile({ path, directory: Directory.Data, encoding: Encoding.UTF8 } as any);
+  //   console.log(`[testFilesystem]: ${path}`, JSON.stringify(result.data));
+  // }
+  //
+  // {
+  //   const path = 'test_write_documents.txt';
+  //   await Filesystem.writeFile({ path, data: content, encoding: Encoding.UTF8, recursive: true, directory: Directory.Documents });
+  //   let result = await Filesystem.readFile({ path, directory: Directory.Documents, encoding: Encoding.UTF8 } as any);
+  //   console.log(`[testFilesystem]: ${path}`, JSON.stringify(result.data));
+  // }
+  //
+  // {
+  //   let result = await Filesystem.readFile({ path: 'test1.txt', directory: Directory.External, encoding: Encoding.UTF8 } as any);
+  //   console.log('[testFilesystem]2 Read back:', JSON.stringify(result.data));
+  // }
+}
+
 export class DownloadService {
   private _webBuffer: ArrayBuffer | null = null;
+
+  /** Returns a URL that can be streamed directly — no file loaded into memory. */
+  async getTpkUrl(): Promise<string> {
+    if (Capacitor.isNativePlatform()) {
+      const { uri } = await Filesystem.getUri({ path: LOCAL_RELATIVE_PATH, directory: Directory.External });
+      // convertFileSrc turns file:// into https://localhost/_capacitor_file_/...
+      // The WebView serves it with Range request support, so zip.js can fetch
+      // individual entries without loading the whole file.
+      return Capacitor.convertFileSrc(uri);
+    } else {
+      if (!this._webBuffer) throw new Error('No file in memory — download it first.');
+      return URL.createObjectURL(new Blob([this._webBuffer]));
+    }
+  }
 
   /** Returns true if the file has been downloaded previously. */
   async fileExistsLocally(): Promise<boolean> {
     if (Capacitor.isNativePlatform()) {
       try {
-        await Filesystem.stat({
-          path: ServerConfig.localFileName,
-          directory: Directory.Documents,
-        });
+        await Filesystem.stat({ path: LOCAL_RELATIVE_PATH, directory: Directory.External });
         return true;
       } catch {
         return false;
@@ -48,10 +88,7 @@ export class DownloadService {
   async deleteCachedFile(): Promise<void> {
     if (Capacitor.isNativePlatform()) {
       try {
-        await Filesystem.deleteFile({
-          path: ServerConfig.localFileName,
-          directory: Directory.Documents,
-        });
+        await Filesystem.deleteFile({ path: LOCAL_RELATIVE_PATH, directory: Directory.External });
       } catch {
         // File did not exist – that's fine.
       }
@@ -79,10 +116,9 @@ export class DownloadService {
 
     const credentials = btoa(`${ServerConfig.username}:${ServerConfig.password}`);
 
-    const fileInfo = await Filesystem.getUri({
-      directory: Directory.Documents,
-      path: ServerConfig.localFileName,
-    });
+    const destination = LOCAL_RELATIVE_PATH;
+
+    console.log('[DownloadService] Saving file to:', destination);
 
     const listeners: Array<{ remove: () => Promise<void> }> = [];
     let cleanedUp = false;
@@ -96,26 +132,30 @@ export class DownloadService {
       if (data.id === DOWNLOAD_ID) {
         onProgress({
           status: DownloadStatus.Downloading,
-          progress: data.progress / 100,
+          progress: data.progress,
         });
       }
     });
     listeners.push(progressListener);
 
-    const completedListener = await CapacitorDownloader.addListener('downloadCompleted', (result) => {
+    const completedListener = await CapacitorDownloader.addListener('downloadCompleted', async (result) => {
       if (result.id === DOWNLOAD_ID) {
         onProgress({
           status: DownloadStatus.Completed,
-          progress: 1,
+          progress: 100,
           localFileName: ServerConfig.localFileName,
         });
         cleanup();
+
+        const fileInfo = await CapacitorDownloader.getFileInfo({ path: destination });
+        console.log('ITS HERERERERERERE:', fileInfo);
       }
     });
     listeners.push(completedListener);
 
     const failedListener = await CapacitorDownloader.addListener('downloadFailed', (error) => {
       if (error.id === DOWNLOAD_ID) {
+        console.log('It failed!');
         onProgress({
           status: DownloadStatus.Failed,
           progress: 0,
@@ -130,7 +170,7 @@ export class DownloadService {
       await CapacitorDownloader.download({
         id: DOWNLOAD_ID,
         url: ServerConfig.fileUrl,
-        destination: fileInfo.uri,
+        destination,
         headers: {
           Authorization: `Basic ${credentials}`,
         },
@@ -200,26 +240,4 @@ export class DownloadService {
     }
   }
 
-  async getDownloadedTpkFile(): Promise<ArrayBuffer> {
-    if (Capacitor.isNativePlatform()) {
-      const result = await Filesystem.readFile({
-        path: ServerConfig.localFileName,
-        directory: Directory.Documents,
-      });
-      if (result.data instanceof Blob) {
-        return result.data.arrayBuffer();
-      }
-      const binaryString = atob(result.data as string);
-      const buffer = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        buffer[i] = binaryString.charCodeAt(i);
-      }
-      return buffer.buffer;
-    } else {
-      if (!this._webBuffer) {
-        throw new Error('No file in memory — download it first.');
-      }
-      return this._webBuffer;
-    }
-  }
 }

@@ -6,12 +6,25 @@ import TileLayer from '@arcgis/core/layers/TileLayer.js';
 import Basemap from '@arcgis/core/Basemap.js';
 import '@arcgis/core/assets/esri/themes/light/main.css';
 
-import { DownloadService, DownloadStatus, DownloadProgress } from './download';
+import { DownloadService, DownloadStatus, DownloadProgress, testFilesystem } from './download';
 import { TileDatabase, getTileDatabase, parseAndStoreTpkFile } from './tpk';
 
 esriConfig.assetsPath = './assets';
 
 const downloadService = new DownloadService();
+
+async function arrayBufferToImage(data: ArrayBuffer): Promise<HTMLImageElement> {
+  const blob = new Blob([data]);
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    img.src = url;
+    await img.decode();
+    return img;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 export default function App() {
   const mapDivRef = useRef<HTMLDivElement>(null);
@@ -24,6 +37,8 @@ export default function App() {
     return () => { tileDatabaseRef.current?.close(); };
   }, []);
 
+  useEffect(() => { testFilesystem(); }, []);
+
   // Initialise map once
   useEffect(() => {
     if (!mapDivRef.current) return;
@@ -31,6 +46,18 @@ export default function App() {
     const tileLayer = new TileLayer({
       url: 'https://services.geodataonline.no/arcgis/rest/services/Geocache_UTM33_EUREF89/GeocacheBilder/MapServer',
     });
+
+    const originalFetchTile = tileLayer.fetchTile.bind(tileLayer);
+    tileLayer.fetchTile = async (level, row, col, options) => {
+      const db = tileDatabaseRef.current;
+      if (db) {
+        const cached = await db.getTile(level, row, col);
+        if (cached?.data) {
+          return arrayBufferToImage(cached.data as ArrayBuffer);
+        }
+      }
+      return originalFetchTile(level, row, col, options);
+    };
 
     const basemap = new Basemap({ baseLayers: [tileLayer] });
     const map = new ArcGISMap({ basemap });
@@ -66,26 +93,22 @@ export default function App() {
 
   const handleDelete = async () => {
     await downloadService.deleteCachedFile();
+    const db = tileDatabaseRef.current;
+    if (db) {
+      await db.clear();
+    }
     setHasCachedFile(false);
     setProgress({ status: DownloadStatus.Idle, progress: 0 });
   };
 
   const handleParseTpkFile = async () => {
-    let start = performance.now();
-    const tpk = await downloadService.getDownloadedTpkFile();
-    const readingTime = performance.now() - start;
-
-    start = performance.now();
     const db = tileDatabaseRef.current;
     if (!db) return;
 
-    await parseAndStoreTpkFile(tpk, db);
-    const parsingTime = performance.now() - start;
-
-    console.log('Parsing tpk completed:')
-    console.log(`  Reading file: ${readingTime} ms`)
-    console.log(`  Parsing and storing: ${parsingTime} ms`)
-    console.log(`  Total: ${readingTime + parsingTime} ms`)
+    const tpkUrl = await downloadService.getTpkUrl();
+    const start = performance.now();
+    await parseAndStoreTpkFile(tpkUrl, db);
+    console.log(`Parsing tpk completed in ${performance.now() - start} ms`);
   };
 
   const { status } = progress;

@@ -16,10 +16,10 @@ export const ServerConfig = {
   //serverUrl: import.meta.env.DEV ? '/tpk-proxy' : 'https://tpk.allma.no',
 
   /** Username for HTTP Basic Auth. */
-  username: '',
+  username: 'tpkuser',
 
   /** Password for HTTP Basic Auth. */
-  password: '',
+  password: 'SuolaSalasana2010',
 
   /** Path to the file on the server. Example: '/files/norway_basemap.tpk' */
   filePath: '/GeocacheBasis_kommunevis_L14_Trondheim_5001.tpk',
